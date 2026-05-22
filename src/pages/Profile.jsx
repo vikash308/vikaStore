@@ -22,8 +22,16 @@ export default function Profile() {
   const fetchProfile = async () => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).limit(1);
     if (data && data.length > 0) {
-      setProfile({ full_name: data[0].full_name || '', phone: data[0].phone || '' });
+      setProfile({ full_name: data[0].full_name || '', phone: data[0].phone || '', role: data[0].role || 'customer' });
     }
+  };
+
+  const requestSeller = async () => {
+    setSavingProfile(true);
+    const { error } = await supabase.from('profiles').update({ role: 'pending_seller' }).eq('id', user.id);
+    if (error) toast.error('Failed to request seller status');
+    else { toast.success('Seller request sent to Admin!'); fetchProfile(); }
+    setSavingProfile(false);
   };
 
   const fetchAddresses = async () => {
@@ -87,7 +95,11 @@ export default function Profile() {
               <div>
                 <h2 className="text-xl font-black text-gray-900">{profile.full_name || 'Update your name'}</h2>
                 <p className="text-gray-500">{user?.email}</p>
-                <span className="text-xs bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full">Verified Account</span>
+                <div className="flex gap-2 mt-2">
+                  <span className="text-xs bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full">Verified Account</span>
+                  {profile.role === 'seller' && <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">Seller</span>}
+                  {profile.role === 'admin' && <span className="text-xs bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded-full">Admin</span>}
+                </div>
               </div>
             </div>
 
@@ -112,11 +124,48 @@ export default function Profile() {
                 </div>
               </div>
               <button type="submit" disabled={savingProfile}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-xl transition-colors disabled:opacity-50">
+                className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-xl transition-colors disabled:opacity-50">
                 {savingProfile ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
                 Save Changes
               </button>
             </form>
+
+            {/* Become a Seller Section */}
+            <div className="mt-10 pt-8 border-t border-gray-100">
+              <h3 className="text-lg font-black text-gray-900 mb-2">Become a Seller</h3>
+              {profile.role === 'customer' && (
+                <div className="bg-gray-50 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 border border-gray-100">
+                  <div>
+                    <p className="font-bold text-gray-900">Want to sell your products?</p>
+                    <p className="text-sm text-gray-500 mt-1">Request a seller account and start managing your own inventory.</p>
+                  </div>
+                  <button onClick={requestSeller} disabled={savingProfile}
+                    className="flex-shrink-0 bg-gray-900 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-gray-800 transition-colors whitespace-nowrap">
+                    Request Approval
+                  </button>
+                </div>
+              )}
+              {profile.role === 'pending_seller' && (
+                <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100 flex items-center gap-3 text-amber-800">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <div>
+                    <p className="font-bold">Request Pending</p>
+                    <p className="text-sm text-amber-700/80">Your request to become a seller is under review by the admin.</p>
+                  </div>
+                </div>
+              )}
+              {profile.role === 'seller' && (
+                <div className="bg-emerald-50 rounded-2xl p-6 border border-emerald-100 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-bold text-emerald-900">You are an approved Seller!</p>
+                    <p className="text-sm text-emerald-700/80">Head over to your Seller Dashboard to add products.</p>
+                  </div>
+                  <Link to="/seller" className="bg-emerald-600 text-white font-bold px-5 py-2.5 rounded-xl hover:bg-emerald-700 transition-colors whitespace-nowrap">
+                    Go to Dashboard
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

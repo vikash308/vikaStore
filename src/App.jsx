@@ -6,6 +6,8 @@ import CartDrawer from './components/CartDrawer';
 import ScrollToTop from './components/ScrollToTop';
 import { useCartStore } from './store/cartStore';
 import { useAuthStore } from './store/authStore';
+import { supabase } from './lib/supabase';
+import { useState, useEffect } from 'react';
 
 // Pages
 import Home from './pages/Home';
@@ -17,6 +19,7 @@ import Profile from './pages/Profile';
 import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
 import AdminDashboard from './pages/AdminDashboard';
+import SellerDashboard from './pages/SellerDashboard';
 
 // Extra Content Pages
 import AboutUs from './pages/AboutUs';
@@ -30,10 +33,24 @@ import RefundPolicy from './pages/RefundPolicy';
 import UpdatePassword from './pages/UpdatePassword';
 
 // ProtectedRoute component
-const ProtectedRoute = ({ children, requireAdmin = false }) => {
+const ProtectedRoute = ({ children, requireAdmin = false, requireSeller = false }) => {
   const { user, loading } = useAuthStore();
+  const [profileRole, setProfileRole] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
-  if (loading) return (
+  useEffect(() => {
+    if (user) {
+      supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        .then(({ data }) => {
+          setProfileRole(data?.role || 'customer');
+          setProfileLoading(false);
+        });
+    } else {
+      setProfileLoading(false);
+    }
+  }, [user]);
+
+  if (loading || profileLoading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
     </div>
@@ -41,8 +58,11 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  const isAdmin = user?.user_metadata?.role === 'admin' || user?.email?.includes('admin');
+  const isAdmin = profileRole === 'admin' || user?.user_metadata?.role === 'admin' || user?.email?.includes('admin');
+  const isSeller = profileRole === 'seller' || isAdmin;
+
   if (requireAdmin && !isAdmin) return <Navigate to="/" replace />;
+  if (requireSeller && !isSeller) return <Navigate to="/" replace />;
 
   return children;
 };
@@ -80,7 +100,8 @@ function App() {
             <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
             <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
 
-            {/* Admin Routes */}
+            {/* Seller & Admin Routes */}
+            <Route path="/seller" element={<ProtectedRoute requireSeller><SellerDashboard /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
 
             {/* Catch-all */}

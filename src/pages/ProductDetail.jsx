@@ -39,7 +39,7 @@ export default function ProductDetail() {
     setLoading(true);
     try {
       const [{ data: prod }, { data: revs }] = await Promise.all([
-        supabase.from('products').select('*').eq('id', id).single(),
+        supabase.from('products').select('*, profiles(*)').eq('id', id).single(),
         supabase.from('reviews').select('*, profiles(full_name)').eq('product_id', id).order('created_at', { ascending: false }),
       ]);
       setProduct(prod);
@@ -177,16 +177,32 @@ export default function ProductDetail() {
           </div>
 
           {selectedTab === 'description' && (
-            <div className="bg-white rounded-3xl border border-gray-100 p-8">
-              <p className="text-gray-600 leading-relaxed text-lg">{product.description}</p>
-              <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[{ label: 'Brand', value: product.brand }, { label: 'Category', value: product.category }, { label: 'Stock', value: `${product.stock} units` }, { label: 'SKU', value: `VST-${product.id}` }].map(({ label, value }) => (
-                  <div key={label} className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-xs text-gray-500 mb-1">{label}</p>
-                    <p className="font-bold text-gray-900">{value}</p>
-                  </div>
-                ))}
+            <div className="space-y-6">
+              <div className="bg-white rounded-3xl border border-gray-100 p-8">
+                <p className="text-gray-600 leading-relaxed text-lg">{product.description}</p>
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[{ label: 'Brand', value: product.brand }, { label: 'Category', value: product.category }, { label: 'Stock', value: `${product.stock} units` }, { label: 'SKU', value: `VST-${product.id}` }].map(({ label, value }) => (
+                    <div key={label} className="bg-gray-50 p-4 rounded-xl">
+                      <p className="text-xs text-gray-500 mb-1">{label}</p>
+                      <p className="font-bold text-gray-900">{value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
+              
+              {/* Seller Info */}
+              {product.profiles && (
+                <div className="bg-white rounded-3xl border border-gray-100 p-8 flex items-center gap-6">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-2xl shrink-0">
+                    {product.profiles.full_name ? product.profiles.full_name.charAt(0).toUpperCase() : 'S'}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Sold By</h3>
+                    <p className="text-xl font-black text-gray-900">{product.profiles.full_name || 'Verified Seller'}</p>
+                    <p className="text-gray-500 text-sm mt-0.5">Member since {new Date(product.profiles.created_at).getFullYear()}</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

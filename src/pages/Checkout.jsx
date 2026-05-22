@@ -427,6 +427,7 @@ export default function Checkout() {
 
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
+  const [paymentType, setPaymentType] = useState('online'); // online | cod
   const [showDodo, setShowDodo] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
@@ -450,7 +451,13 @@ export default function Checkout() {
   const handlePlaceOrder = () => {
     if (addresses.length === 0) { toast.error('Add a delivery address first in your Profile'); return; }
     if (!selectedAddress) { toast.error('Select a delivery address'); return; }
-    setShowDodo(true);
+    
+    if (paymentType === 'online') {
+      setShowDodo(true);
+    } else {
+      // Process Cash on Delivery immediately
+      handlePaymentSuccess('cod');
+    }
   };
 
   const handlePaymentSuccess = async (payMethod) => {
@@ -461,13 +468,21 @@ export default function Checkout() {
       const addr = addresses.find(a => a.id === selectedAddress);
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .insert({ user_id: user.id, address_id: selectedAddress, total_amount: total, status: 'confirmed', payment_status: 'paid', payment_method: payMethod })
+        .insert({ 
+          user_id: user.id, 
+          address_id: selectedAddress, 
+          total_amount: total, 
+          status: 'confirmed', 
+          payment_status: payMethod === 'cod' ? 'unpaid' : 'paid', 
+          payment_method: payMethod 
+        })
         .select().single();
       if (orderError) throw orderError;
 
       await supabase.from('order_items').insert(
         cart.map(item => ({ order_id: order.id, product_id: item.id, quantity: item.quantity, price_at_time: item.price }))
       );
+
 
       setOrderInfo({ txnId, orderNumber, paymentMethod: payMethod, address: addr });
       clearCart();
@@ -505,8 +520,11 @@ export default function Checkout() {
           </div>
           <div className="bg-gray-50 rounded-2xl p-4 mb-6 text-left space-y-2">
             <div className="flex justify-between text-sm"><span className="text-gray-500">Transaction ID</span><span className="font-mono font-bold text-gray-900">{orderInfo.txnId}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Payment</span><span className="font-bold text-gray-900 capitalize">{orderInfo.paymentMethod}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Amount Paid</span><span className="font-bold text-emerald-600">₹{total.toLocaleString('en-IN')}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Payment</span><span className="font-bold text-gray-900 capitalize">{orderInfo.paymentMethod === 'cod' ? 'Cash on Delivery' : orderInfo.paymentMethod}</span></div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Amount {orderInfo.paymentMethod === 'cod' ? 'to Pay' : 'Paid'}</span>
+              <span className="font-bold text-emerald-600">₹{total.toLocaleString('en-IN')}</span>
+            </div>
           </div>
           <div className="flex flex-col gap-3">
             <button onClick={() => setShowInvoice(true)}
@@ -580,14 +598,26 @@ export default function Checkout() {
                 )}
               </div>
 
-              {/* Payment note */}
-              <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-3xl p-5 text-white flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
-                  <Zap className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <p className="font-black text-base">Powered by Dodo Payments</p>
-                  <p className="text-emerald-100 text-sm">Cards, UPI, Netbanking — all supported · 256-bit SSL encrypted</p>
+              {/* Payment Method Selection */}
+              <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+                <h2 className="text-lg font-black text-gray-900 flex items-center gap-2 mb-4">
+                  <CreditCard className="h-5 w-5 text-emerald-600" /> Payment Method
+                </h2>
+                <div className="space-y-3">
+                  <label className={`flex items-start gap-3 p-4 border-2 rounded-2xl cursor-pointer transition-all ${paymentType === 'online' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-100 hover:border-gray-200'}`}>
+                    <input type="radio" name="paymentType" checked={paymentType === 'online'} onChange={() => setPaymentType('online')} className="mt-1 accent-emerald-600" />
+                    <div>
+                      <p className="font-bold text-gray-900">Pay Online</p>
+                      <p className="text-sm text-gray-600">Cards, UPI, Netbanking (Secured by Dodo Payments)</p>
+                    </div>
+                  </label>
+                  <label className={`flex items-start gap-3 p-4 border-2 rounded-2xl cursor-pointer transition-all ${paymentType === 'cod' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-100 hover:border-gray-200'}`}>
+                    <input type="radio" name="paymentType" checked={paymentType === 'cod'} onChange={() => setPaymentType('cod')} className="mt-1 accent-emerald-600" />
+                    <div>
+                      <p className="font-bold text-gray-900">Cash on Delivery (COD)</p>
+                      <p className="text-sm text-gray-600">Pay when your order arrives at your doorstep</p>
+                    </div>
+                  </label>
                 </div>
               </div>
             </div>
@@ -619,11 +649,17 @@ export default function Checkout() {
                 <div className="p-5">
                   <button onClick={handlePlaceOrder} disabled={addresses.length === 0}
                     className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl transition-all disabled:opacity-50 text-base shadow-lg shadow-emerald-200">
-                    <Lock className="h-4 w-4" /> Proceed to Pay ₹{total.toLocaleString('en-IN')}
+                    {paymentType === 'online' ? (
+                      <><Lock className="h-4 w-4" /> Proceed to Pay ₹{total.toLocaleString('en-IN')}</>
+                    ) : (
+                      <><Package className="h-4 w-4" /> Place Order</>
+                    )}
                   </button>
-                  <p className="text-center text-xs text-gray-400 mt-3 flex items-center justify-center gap-1">
-                    <Shield className="h-3.5 w-3.5" /> Secured by Dodo Payments
-                  </p>
+                  {paymentType === 'online' && (
+                    <p className="text-center text-xs text-gray-400 mt-3 flex items-center justify-center gap-1">
+                      <Shield className="h-3.5 w-3.5" /> Secured by Dodo Payments
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

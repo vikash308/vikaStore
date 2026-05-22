@@ -41,11 +41,32 @@ export default function AdminDashboard() {
   const [allOrders, setAllOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
+  // Users Management
+  const [allUsers, setAllUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  // Image Upload State
+  const [uploadingImage, setUploadingImage] = useState(false);
+
   useEffect(() => {
     fetchDashboardData();
     fetchProducts();
     fetchAllOrders();
+    fetchAllUsers();
   }, []);
+
+  const fetchAllUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      setAllUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -94,7 +115,7 @@ export default function AdminDashboard() {
         .from('orders')
         .select(`
           *,
-          profiles(full_name)
+          addresses(full_name)
         `)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -119,7 +140,8 @@ export default function AdminDashboard() {
         ...formData,
         price: Number(formData.price),
         original_price: formData.original_price ? Number(formData.original_price) : null,
-        stock: Number(formData.stock)
+        stock: Number(formData.stock),
+        seller_id: user.id
       };
 
       const { data, error } = await supabase
@@ -217,6 +239,36 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleUserRoleUpdate = async (userId, newRole) => {
+    try {
+      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+      if (error) throw error;
+      toast.success(`User role updated to ${newRole}`);
+      fetchAllUsers();
+    } catch (error) {
+      toast.error(error.message || 'Failed to update user role');
+    }
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).slice(2)}.${fileExt}`;
+      const { error } = await supabase.storage.from('product-images').upload(fileName, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('product-images').getPublicUrl(fileName);
+      setFormData({ ...formData, image: data.publicUrl });
+      toast.success('Image uploaded successfully!');
+    } catch (err) {
+      toast.error('Image upload failed: ' + err.message);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -266,6 +318,13 @@ export default function AdminDashboard() {
           >
             <PackagePlus className="h-5 w-5" />
             <span>Manage Products</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab('users')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors ${activeTab === 'users' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Users className="h-5 w-5" />
+            <span>Manage Users</span>
           </button>
           <button 
             onClick={() => setActiveTab('orders')}
@@ -537,7 +596,7 @@ export default function AdminDashboard() {
                         <tr key={order.id} className="hover:bg-gray-50/50 transition-colors text-sm">
                           <td className="p-4 font-mono font-bold text-gray-700">#{order.id.split('-')[0]}</td>
                           <td className="p-4">
-                            <p className="font-bold text-gray-900">{order.profiles?.full_name || 'Anonymous User'}</p>
+                            <p className="font-bold text-gray-900">{order.addresses?.full_name || 'Anonymous User'}</p>
                             <p className="text-xs text-gray-400 font-mono select-all truncate w-32">{order.user_id}</p>
                           </td>
                           <td className="p-4 text-gray-500">{new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
@@ -556,6 +615,73 @@ export default function AdminDashboard() {
                               <option value="shipped">Shipped</option>
                               <option value="delivered">Delivered</option>
                               <option value="cancelled">Cancelled</option>
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* TAB 4: USERS */}
+        {activeTab === 'users' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            <div>
+              <h1 className="text-2xl font-black text-gray-900">User Management</h1>
+              <p className="text-gray-500 text-sm">Manage user roles and approve seller requests</p>
+            </div>
+
+            {usersLoading ? (
+              <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto"></div>
+                <p className="text-gray-500 mt-4 font-medium">Fetching users...</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50/50 border-b border-gray-100 text-gray-500 font-semibold text-sm">
+                        <th className="p-4">User Details</th>
+                        <th className="p-4">Phone</th>
+                        <th className="p-4">Joined</th>
+                        <th className="p-4 text-center">Current Role</th>
+                        <th className="p-4 text-center">Change Role</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {allUsers.map(u => (
+                        <tr key={u.id} className="hover:bg-gray-50/50 transition-colors text-sm">
+                          <td className="p-4">
+                            <p className="font-bold text-gray-900">{u.full_name || 'Anonymous'}</p>
+                            <p className="text-xs text-gray-400 font-mono truncate w-32">{u.id}</p>
+                          </td>
+                          <td className="p-4 text-gray-500">{u.phone || 'N/A'}</td>
+                          <td className="p-4 text-gray-500">{new Date(u.created_at).toLocaleDateString('en-IN')}</td>
+                          <td className="p-4 text-center">
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                              u.role === 'admin' ? 'bg-red-100 text-red-700' :
+                              u.role === 'seller' ? 'bg-purple-100 text-purple-700' :
+                              u.role === 'pending_seller' ? 'bg-amber-100 text-amber-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {u.role || 'customer'}
+                            </span>
+                          </td>
+                          <td className="p-4 text-center">
+                            <select 
+                              value={u.role || 'customer'} 
+                              onChange={e => handleUserRoleUpdate(u.id, e.target.value)}
+                              className="appearance-none font-bold text-xs uppercase tracking-wider rounded-full px-3 py-1.5 text-center cursor-pointer border focus:outline-none transition-colors border-gray-200 text-gray-700 hover:bg-gray-50 bg-white"
+                            >
+                              <option value="customer">Customer</option>
+                              <option value="pending_seller">Pending Seller</option>
+                              <option value="seller">Seller</option>
+                              <option value="admin">Admin</option>
                             </select>
                           </td>
                         </tr>
@@ -659,14 +785,22 @@ export default function AdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Image URL</label>
-                  <input 
-                    type="url" required
-                    value={formData.image}
-                    onChange={e => setFormData({...formData, image: e.target.value})}
-                    placeholder="https://images.unsplash.com/photo-..."
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Product Image (Device Upload)</label>
+                  <div className="flex gap-4 items-center">
+                    <input 
+                      type="file" accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={uploadingImage}
+                      className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                    />
+                    {uploadingImage && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-emerald-600"></div>}
+                  </div>
+                  {formData.image && (
+                    <div className="mt-3 relative inline-block">
+                      <img src={formData.image} alt="Preview" className="h-20 w-20 object-cover rounded-xl border border-gray-200" />
+                      <button type="button" onClick={() => setFormData({...formData, image: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"><X className="h-3 w-3"/></button>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -711,7 +845,8 @@ export default function AdminDashboard() {
                   </button>
                   <button 
                     type="submit" 
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-lg shadow-emerald-600/10"
+                    disabled={uploadingImage || !formData.image}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-lg shadow-emerald-600/10 disabled:opacity-50"
                   >
                     {showAddModal ? 'Save Product' : 'Update Product'}
                   </button>
