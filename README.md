@@ -2,6 +2,8 @@
 
 VikaStore is a full-featured, multi-vendor e-commerce web application built with **React, Vite, Tailwind CSS, and Supabase**. It provides distinct experiences for three types of users: **Customers**, **Sellers**, and **Admins**.
 
+**🔗 [Live Demo](https://vika-store-teal.vercel.app)**
+
 ## 🌟 Key Features
 
 ### 👤 Customer Features
